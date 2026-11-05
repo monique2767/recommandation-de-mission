@@ -1,159 +1,218 @@
 # Recommandation de missions de bénévolat
 
-Ce projet charge des missions depuis un classeur Excel et les classe selon les compétences d’un volontaire, sa disponibilité et la date limite des missions.
+Ce projet fournit un moteur de recommandation de missions de bénévolat ainsi qu'une **API REST sécurisée (FastAPI)** permettant d'intégrer le système directement sur un site web (plateforme de volontariat).
+
+Les missions sont filtrées et classées selon les compétences du volontaire, sa disponibilité (`short_term` ou `long_term`), les dates limites de candidature et les durées de mission.
+
+---
 
 ## Fonctionnalités
 
-- Charge les missions et les compétences associées depuis un fichier Excel.
-- Exclut les missions dont la date limite est passée.
-- Calcule un score de correspondance des compétences.
-- Classe les missions selon leur adéquation avec le profil du volontaire.
-- Fournit des tests automatisés pour vérifier les principales règles de recommandation.
+- **Algorithme de recommandation :**
+  - Exclut automatiquement les missions dont la date limite de candidature est expirée (référentiel horaire du Bénin : `Africa/Porto-Novo`).
+  - Exclut les missions dont les candidatures n'ont pas encore commencé (`application_start_date` future).
+  - Gère les durées inconnues sans pénaliser la mission (compatible courte et longue durée).
+  - Calcule un score de correspondance basé sur les compétences demandées.
+  - Trie les missions selon 5 critères hiérarchiques d'adéquation.
+- **API REST v1 (FastAPI) :**
+  - Point d'accès sécurisé `POST /v1/recommandations`.
+  - Authentification obligatoire par en-tête HTTP `X-API-Key`.
+  - Protection de la vie privée : rejet strict de toute donnée personnelle dans le profil volontaire (`extra="forbid"`).
+  - Flexibilité pour la plateforme : les champs inutiles des missions (organisation, catégorie, logo...) sont automatiquement ignorés.
+  - Gestion du CORS configurable par nom de domaine via variable d'environnement `ALLOWED_ORIGINS`.
+  - Documentation Swagger interactive accessible sur `/docs`.
+- **Tests automatisés :**
+  - Suite complète avec `pytest` (36 tests validés couvrant la logique métier, la sécurité et l'API).
+
+---
 
 ## Prérequis
 
-- Python 3
+- Python 3.10+
 - `pip`
 
-Les dépendances sont listées dans [`requirements.txt`](requirements.txt) :
+Les dépendances sont définies dans [`requirements.txt`](requirements.txt) :
+- `pandas` et `openpyxl` : manipulation de données.
+- `fastapi` et `uvicorn` : framework web asynchrone et serveur ASGI.
+- `pydantic` : validation stricte des schémas.
+- `tzdata` : gestion précise des fuseaux horaires (`Africa/Porto-Novo`).
+- `pytest` et `httpx` : tests automatisés.
 
-- `pandas` pour manipuler les données ;
-- `openpyxl` pour lire le classeur Excel ;
-- `pytest` pour exécuter les tests.
+---
 
 ## Installation
 
-Depuis la racine du projet, créez un environnement virtuel :
+1. Clonez le dépôt et placez-vous à la racine :
+   ```bash
+   git clone <url-du-depot>
+   cd recommandation-de-mission
+   ```
+
+2. Créez un environnement virtuel :
+   ```bash
+   python -m venv .venv
+   ```
+
+3. Activez l'environnement :
+   - Sous Linux / macOS :
+     ```bash
+     source .venv/bin/activate
+     ```
+   - Sous Windows (PowerShell) :
+     ```powershell
+     .venv\Scripts\Activate.ps1
+     ```
+
+4. Installez les dépendances :
+   ```bash
+   pip install -r requirements.txt
+   ```
+
+---
+
+## Configuration & Lancement de l'API
+
+### 1. Variables d'environnement
+
+L'API requiert la configuration d'une clé d'API pour sécuriser les échanges :
+
+- **`API_KEY`** *(Obligatoire)* : la clé secrète partagée que le site doit envoyer dans l'en-tête `X-API-Key`.
+- **`ALLOWED_ORIGINS`** *(Optionnel)* : liste des domaines autorisés pour le CORS (séparés par des virgules, ex: `https://monsite.bj`). L'API étant généralement appelée de serveur à serveur, le CORS est désactivé par défaut.
+
+Exemple sous Linux / macOS :
+```bash
+export API_KEY="ma-cle-secrete-production"
+export ALLOWED_ORIGINS="https://plateforme-volontariat.bj"
+```
+
+### 2. Démarrer le serveur
 
 ```bash
-python -m venv .venv
+uvicorn src.api:app --reload --port 8000
 ```
 
-Activez-le sous Windows :
+- **Documentation interactive Swagger (OpenAPI) :** [http://localhost:8000/docs](http://localhost:8000/docs)
+- **Documentation ReDoc :** [http://localhost:8000/redoc](http://localhost:8000/redoc)
 
-```powershell
-.venv\Scripts\Activate.ps1
+---
+
+## Points de terminaison (Endpoints)
+
+### 1. Vérification de santé : `GET /sante`
+Accessible publiquement sans clé d'API pour les healthchecks (Docker, reverse proxy).
+```json
+{"statut": "ok"}
 ```
 
-Ou sous macOS/Linux :
+### 2. Recommandation : `POST /v1/recommandations`
 
-```bash
-source .venv/bin/activate
+- **En-têtes requis :**
+  - `Content-Type: application/json`
+  - `X-API-Key: <votre_clé_api>`
+
+#### Exemple de requête (envoyée par la plateforme) :
+```json
+{
+  "volunteer": {
+    "availability": "long_term",
+    "skills": [
+      {"id": 1, "title": "Communication"}
+    ]
+  },
+  "missions": [
+    {
+      "id": 1,
+      "title": "Mission A",
+      "application_end_date": "2026-12-31T20:00:00Z",
+      "start_date": "2026-11-10",
+      "end_date": "2027-11-09",
+      "skills": [
+        {"id": 1, "title": "Communication"},
+        {"id": 2, "title": "Premiers secours"}
+      ]
+    },
+    {
+      "id": 2,
+      "title": "Mission B",
+      "application_end_date": "2026-12-15T20:00:00Z",
+      "duration_in_days": 21,
+      "skills": [
+        {"id": 1, "title": "Communication"}
+      ]
+    }
+  ]
+}
 ```
 
-Installez ensuite les dépendances :
-
-```bash
-pip install -r requirements.txt
+#### Exemple de réponse (retournée par l'API) :
+```json
+{
+  "nombre": 2,
+  "missions": [
+    {
+      "rang": 1,
+      "id": 1,
+      "title": "Mission A",
+      "score": 0.5
+    },
+    {
+      "rang": 2,
+      "id": 2,
+      "title": "Mission B",
+      "score": 1.0
+    }
+  ]
+}
 ```
 
-## Données d’entrée
+*Note : La mission A apparaît en premier car elle est de longue durée (> 60 jours), ce qui correspond à la disponibilité `long_term` choisie par le volontaire.*
 
-Le classeur fourni est [`data/Données_du_site_volontariat_du_16octobre2026_corrige_v2.xlsx`](data/Données_du_site_volontariat_du_16octobre2026_corrige_v2.xlsx). Il doit contenir les deux feuilles ci-dessous.
+---
 
-### Feuille `missions`
+## Règles de gestion et de classement
 
-| Colonne | Utilisation |
+1. **Filtrage par date limite :**
+   - Une mission dont la `application_end_date` est passée à minuit au Bénin (`Africa/Porto-Novo`) est exclue.
+   - Une mission dont la `application_start_date` est future n'est pas encore recommandée.
+2. **Gestion de la disponibilité :**
+   - `"short_term"` : mission courte ($\le$ 60 jours).
+   - `"long_term"` : mission longue (> 60 jours).
+   - Durée inconnue (ni durée, ni dates de début/fin) : la mission n'est pas pénalisée et reste compatible avec les deux disponibilités.
+3. **Calcul du score de compétences :**
+   $$\text{Score} = \frac{\text{Nombre de compétences communes}}{\text{Nombre de compétences demandées par la mission}}$$
+4. **Ordre de tri hiérarchique (5 critères) :**
+   1. Missions ayant au moins une compétence en commun (`score > 0`).
+   2. Missions compatibles en durée avec la disponibilité demandée.
+   3. Score de correspondance le plus élevé.
+   4. Date limite de candidature la plus proche.
+   5. Identifiant le plus petit (départage déterministe).
+
+---
+
+## Décisions validées & à valider
+
+| Décision | Statut |
 | --- | --- |
-| `id` | Identifiant de la mission |
-| `titre` | Intitulé de la mission affiché dans les résultats |
-| `duree_jours` | Durée en jours, utilisée pour évaluer la disponibilité |
-| `date_limite` | Date limite de candidature ; les missions déjà échues sont exclues |
+| La « date du jour » est calculée selon le fuseau du Bénin (`Africa/Porto-Novo`) | Validée |
+| Authentification de l'API via en-tête `X-API-Key` | Validée |
+| Rejet strict de données personnelles (`extra="forbid"`) sur le volontaire | Validée |
+| Une durée inconnue n'est pas pénalisée (compatible courte et longue) | À confirmer avec l'équipe métier |
 
-### Feuille `missions_competences`
-
-| Colonne | Utilisation |
-| --- | --- |
-| `mission_id` | Identifiant de la mission associée |
-| `competence` | Compétence demandée pour cette mission |
-
-Les noms des feuilles et des colonnes doivent correspondre à ceux attendus par le programme.
-
-## Utilisation
-
-Le projet expose ses fonctions sous forme de module Python ; il ne fournit pas d’interface en ligne de commande. Depuis la racine du dépôt, chargez les données puis appelez `recommander` :
-
-```python
-from src.recommandation import charger_donnees, recommander
-
-fichier = (
-    "data/"
-    "Données_du_site_volontariat_du_16octobre2026_corrige_v2.xlsx"
-)
-
-missions, competences_par_mission = charger_donnees(fichier)
-
-resultats = recommander(
-    missions=missions,
-    competences_par_mission=competences_par_mission,
-    competences={"Communication", "Premiers secours"},
-    disponibilite="courte",
-)
-
-print(resultats)
-```
-
-`disponibilite` doit valoir `"courte"` ou `"longue"`. Une mission est considérée comme courte si elle dure 60 jours ou moins ; au-delà, elle est considérée comme longue.
-
-Par défaut, le programme utilise la date du jour pour déterminer si une mission est encore disponible. Pour obtenir des résultats reproductibles — par exemple dans un notebook ou un test — passez une date explicite :
-
-```python
-import pandas as pd
-
-resultats = recommander(
-    missions,
-    competences_par_mission,
-    {"Communication", "Premiers secours"},
-    "courte",
-    aujourdhui=pd.Timestamp("2026-10-23"),
-)
-```
-
-## Comprendre le classement
-
-Une mission est disponible si sa date limite est égale ou postérieure à la date de référence. Les missions dont la date limite est antérieure sont exclues.
-
-Quand le volontaire fournit au moins une compétence, les missions sont classées selon ces critères, dans cet ordre :
-
-1. Les missions ayant au moins une compétence en commun sont prioritaires.
-2. Les missions dont la durée correspond à la disponibilité sont prioritaires.
-3. Le score de correspondance le plus élevé est prioritaire.
-4. En cas d’égalité, la date limite la plus proche est prioritaire.
-5. Si nécessaire, l’identifiant le plus petit est prioritaire.
-
-Le score est calculé ainsi :
-
-> nombre de compétences communes ÷ nombre de compétences demandées par la mission
-
-Un score de `1.0` signifie que toutes les compétences demandées par la mission figurent dans le profil fourni. Une mission sans compétence demandée obtient un score de `0.0`.
-
-**Sans compétence fournie :** les missions disponibles sont classées par date limite, puis par identifiant. Dans ce cas, le critère de disponibilité courte ou longue n’est pas appliqué au classement.
-
-La disponibilité influence l’ordre des résultats, mais les missions incompatibles ne sont pas supprimées du résultat.
-
-## Résultat
-
-`recommander(...)` renvoie un tableau pandas contenant les missions disponibles, classées par ordre de recommandation, avec les colonnes suivantes :
-
-| Colonne | Description |
-| --- | --- |
-| `id` | Identifiant de la mission |
-| `titre` | Intitulé de la mission |
-| `score` | Score de correspondance des compétences |
-| `duree_jours` | Durée de la mission en jours |
-| `date_limite` | Date limite de candidature |
-
-Si la valeur de `disponibilite` est différente de `"courte"` ou `"longue"`, la fonction lève une erreur `ValueError`.
+---
 
 ## Exécuter les tests
+
+Les réglages de tests (clé d'API fictive et origine autorisée) sont préconfigurés dans [`src/conftest.py`](src/conftest.py).
 
 Depuis la racine du projet, lancez :
 
 ```bash
-pytest
+python -m pytest
 ```
 
-Les tests vérifient notamment le seuil entre les missions courtes et longues, le score des compétences, le classement et l’exclusion des missions échues.
+Résultat attendu : **36 passed**.
+
+---
 
 ## Structure du projet
 
@@ -162,14 +221,14 @@ Les tests vérifient notamment le seuil entre les missions courtes et longues, l
 ├── data/
 │   └── Données_du_site_volontariat_du_16octobre2026_corrige_v2.xlsx
 ├── src/
-│   └── recommandation.py
+│   ├── api.py                               # API FastAPI v1 sécurisée avec Pydantic
+│   ├── conftest.py                          # Configuration environnement pour les tests
+│   └── recommandation.py                    # Logique de recommandation et fuseaux
 ├── tests/
-│   └── test_recommandation.py
-├── exploration.ipynb
-├── requirements.txt
-└── README.md
+│   ├── test_api.py                          # Tests de l'API (sécurité, routes, formats)
+│   └── test_recommandation.py               # Tests unitaires de l'algorithme
+├── Specification_Technique_API_Recommandation.pdf # Fiche de spécification pour le site
+├── exploration.ipynb                        # Exploration des données
+├── requirements.txt                         # Dépendances Python
+└── README.md                                # Documentation du projet
 ```
-
-- [`src/recommandation.py`](src/recommandation.py) contient le chargement des données et la logique de recommandation.
-- [`tests/test_recommandation.py`](tests/test_recommandation.py) contient les tests automatisés.
-- [`exploration.ipynb`](exploration.ipynb) est un notebook d’exploration des données.
