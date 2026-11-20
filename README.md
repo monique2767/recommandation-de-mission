@@ -222,13 +222,146 @@ Résultat attendu : **36 passed**.
 │   └── Données_du_site_volontariat_du_16octobre2026_corrige_v2.xlsx
 ├── src/
 │   ├── api.py                               # API FastAPI v1 sécurisée avec Pydantic
-│   ├── conftest.py                          # Configuration environnement pour les tests
 │   └── recommandation.py                    # Logique de recommandation et fuseaux
 ├── tests/
+│   ├── conftest.py                          # Configuration environnement pour les tests
 │   ├── test_api.py                          # Tests de l'API (sécurité, routes, formats)
 │   └── test_recommandation.py               # Tests unitaires de l'algorithme
 ├── Specification_Technique_API_Recommandation.pdf # Fiche de spécification pour le site
+├── SPECIFICATION_TECHNIQUE.md               # Spécification technique en Markdown
 ├── exploration.ipynb                        # Exploration des données
 ├── requirements.txt                         # Dépendances Python
 └── README.md                                # Documentation du projet
 ```
+
+---
+
+## Guide rapide des commandes (Cheat Sheet)
+
+### 1. Installation et activation de l'environnement
+
+- **Sous Linux / macOS :**
+  ```bash
+  python3 -m venv .venv
+  source .venv/bin/activate
+  pip install -r requirements.txt
+  ```
+
+- **Sous Windows (PowerShell) :**
+  ```powershell
+  python -m venv .venv
+  .venv\Scripts\Activate.ps1
+  pip install -r requirements.txt
+  ```
+
+### 2. Exécution des tests automatisés
+
+- **Lancer les 36 tests du projet :**
+  ```bash
+  python -m pytest
+  ```
+
+- **Lancer les tests en mode verbeux (détail de chaque test) :**
+  ```bash
+  python -m pytest -v
+  ```
+
+- **Lancer uniquement les tests unitaires de l'algorithme (10 tests) :**
+  ```bash
+  python -m pytest tests/test_recommandation.py
+  ```
+
+- **Lancer uniquement les tests d'intégration de l'API (26 tests) :**
+  ```bash
+  python -m pytest tests/test_api.py
+  ```
+
+### 3. Lancer l'API en local (Serveur)
+
+1. **Définir la clé d'API requise :**
+   - *Linux / macOS :*
+     ```bash
+     export API_KEY="cle-de-test"
+     ```
+   - *Windows (PowerShell) :*
+     ```powershell
+     $env:API_KEY="cle-de-test"
+     ```
+
+2. **Démarrer le serveur Uvicorn :**
+   ```bash
+   uvicorn src.api:app --reload --port 8000
+   ```
+
+3. **Ouvrir la documentation interactive :**
+   - Swagger UI : [http://localhost:8000/docs](http://localhost:8000/docs)
+   - ReDoc : [http://localhost:8000/redoc](http://localhost:8000/redoc)
+
+### 4. Tester l'API en local (Ligne de commande avec `curl`)
+
+Depuis un autre terminal pendant que le serveur tourne :
+
+- **Vérifier l'état de santé (`GET /sante`) :**
+  ```bash
+  curl -X GET http://localhost:8000/sante
+  ```
+
+- **Tester la recommandation (`POST /v1/recommandations`) :**
+  ```bash
+  curl -X POST "http://localhost:8000/v1/recommandations" \
+    -H "Content-Type: application/json" \
+    -H "X-API-Key: cle-de-test" \
+    -d '{
+      "volunteer": {
+        "availability": "long_term",
+        "skills": [{"id": 1, "title": "Communication"}]
+      },
+      "missions": [
+        {
+          "id": 1,
+          "title": "Mission Longue",
+          "application_end_date": "2026-12-31T20:00:00Z",
+          "start_date": "2026-11-10",
+          "end_date": "2027-11-09",
+          "skills": [{"id": 1, "title": "Communication"}]
+        },
+        {
+          "id": 2,
+          "title": "Mission Courte",
+          "application_end_date": "2026-12-15T20:00:00Z",
+          "duration_in_days": 20,
+          "skills": [{"id": 1, "title": "Communication"}]
+        }
+      ]
+    }'
+  ```
+
+- **Vérifier le blocage de sécurité sans clé (`HTTP 401`) :**
+  ```bash
+  curl -i -X POST "http://localhost:8000/v1/recommandations" \
+    -H "Content-Type: application/json" \
+    -d '{"volunteer": {"availability": "short_term", "skills": []}, "missions": []}'
+  ```
+
+### 5. Tester avec un script rapide Python
+
+```bash
+python -c '
+import httpx
+
+url = "http://localhost:8000/v1/recommandations"
+headers = {"X-API-Key": "cle-de-test"}
+payload = {
+    "volunteer": {"availability": "short_term", "skills": [{"id": 1}]},
+    "missions": [
+        {"id": 10, "title": "Aide aux devoirs", "application_end_date": "2026-12-31T00:00:00Z", "duration_in_days": 15, "skills": [{"id": 1}]}
+    ]
+}
+
+res = httpx.post(url, json=payload, headers=headers)
+print("Statut :", res.status_code)
+print("Résultat :", res.json())
+'
+```
+
+
