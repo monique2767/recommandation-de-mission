@@ -229,10 +229,21 @@ Résultat attendu : **36 passed**.
 │   └── test_recommandation.py               # Tests unitaires de l'algorithme
 ├── Specification_Technique_API_Recommandation.pdf # Fiche de spécification pour le site
 ├── SPECIFICATION_TECHNIQUE.md               # Spécification technique en Markdown
+├── MissionMatcher_modifie.php               # Exemple d'appel API depuis Laravel
+├── MissionMatcher_original.php              # Code d'origine de la plateforme
 ├── exploration.ipynb                        # Exploration des données
 ├── requirements.txt                         # Dépendances Python
 └── README.md                                # Documentation du projet
 ```
+
+---
+
+## Exemple d'intégration avec la plateforme Laravel
+
+Pour valider et démontrer le fonctionnement de l'API en conditions réelles sur la plateforme ANPE/PIV (développée sous Laravel), deux fichiers d'illustration sont inclus à la racine du dépôt :
+
+- **[`MissionMatcher_original.php`](MissionMatcher_original.php)** : Implémentation d'origine de la plateforme qui effectuait un calcul interne en PHP.
+- **[`MissionMatcher_modifie.php`](MissionMatcher_modifie.php)** : Version modifiée démontrant comment la plateforme délègue le calcul à notre API Python (`POST /v1/recommandations`), avec une gestion sécurisée par `try / catch` (repli automatique transparent sur l'ancien calcul en cas d'indisponibilité réseau).
 
 ---
 
